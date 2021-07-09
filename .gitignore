@@ -1,0 +1,11 @@
+--2021-07-09 21:16:04--  https://www.toptal.com/developers/gitignore/api/python,visualstudiocode
+Resolving www.toptal.com (www.toptal.com)... 104.22.42.181, 104.22.43.181, 172.67.4.131, ...
+Connecting to www.toptal.com (www.toptal.com)|104.22.42.181|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/plain]
+Saving to: ‘python,visualstudiocode’
+
+     0K ..                                                     35.0M=0s
+
+2021-07-09 21:16:04 (35.0 MB/s) - ‘python,visualstudiocode’ saved [2584]
+
