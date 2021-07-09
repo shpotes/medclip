@@ -233,7 +233,10 @@ class ImageTextDataset(VisionDataset):
 
     def _load_target(self, idx):
         sections = self.captions[idx]
-        longest_section = max(sections.values(), key=len)
+        longest_section = max(
+            filter(lambda x: isinstance(x, str), sections.values()), 
+            key=len
+        )
 
         return longest_section
 
@@ -365,14 +368,12 @@ def main():
     train_dataset = ImageTextDataset(
         data_args.data_dir,
         data_args.train_file,
-        captions_per_image=2,
         transform=preprocess,
     )
 
     eval_dataset = ImageTextDataset(
         data_args.data_dir,
         data_args.validation_file,
-        captions_per_image=1,
         transform=preprocess,
     )
 
