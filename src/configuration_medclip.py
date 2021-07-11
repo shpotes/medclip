@@ -7,10 +7,10 @@ from transformers.utils import logging
 logger = logging.get_logger(__name__)
 
 
-class HybridCLIPConfig(PretrainedConfig):
+class MedCLIPConfig(PretrainedConfig):
     r"""
-    :class:`HybridCLIPConfig` is the configuration class to store the configuration of a
-    :class:`~HybridCLIPModel`. It is used to instantiate HybridCLIPModel model according to the specified arguments,
+    :class:`MedCLIPConfig` is the configuration class to store the configuration of a
+    :class:`~MedCLIPModel`. It is used to instantiate HybridCLIPModel model according to the specified arguments,
     defining the text model and vision model configs.
 
     Configuration objects inherit from :class:`~transformers.PretrainedConfig` and can be used to control the model
@@ -28,13 +28,13 @@ class HybridCLIPConfig(PretrainedConfig):
 
     Examples::
 
-        >>> from transformers import BertConfig, CLIPConfig, HybridCLIPConfig, FlaxHybridCLIP
+        >>> from transformers import BertConfig, CLIPConfig, MedCLIPConfig, FlaxMedCLIP
 
         >>> # Initializing a BERT and CLIP configuration
         >>> config_text = BertConfig()
         >>> config_vision = CLIPConfig()
 
-        >>> config = HybridCLIPConfig.from_text_vision_configs(config_text, config_vision, projection_dim=512)
+        >>> config = MedCLIPConfig.from_text_vision_configs(config_text, config_vision, projection_dim=512)
 
         >>> # Initializing a BERT and CLIPVision model
         >>> model = EncoderDecoderModel(config=config)
@@ -47,8 +47,8 @@ class HybridCLIPConfig(PretrainedConfig):
         >>> model.save_pretrained('my-model')
 
         >>> # loading model and config from pretrained folder
-        >>> encoder_decoder_config = HybridCLIPConfig.from_pretrained('my-model')
-        >>> model = FlaxHybridCLIP.from_pretrained('my-model', config=encoder_decoder_config)
+        >>> encoder_decoder_config = MedCLIPConfig.from_pretrained('my-model')
+        >>> model = FlaxMedCLIP.from_pretrained('my-model', config=encoder_decoder_config)
     """
 
     model_type = "hybrid-clip"
@@ -84,11 +84,11 @@ class HybridCLIPConfig(PretrainedConfig):
     @classmethod
     def from_text_vision_configs(cls, text_config: PretrainedConfig, vision_config: PretrainedConfig, **kwargs):
         r"""
-        Instantiate a :class:`HybridCLIPConfig` (or a derived class) from text model configuration and
+        Instantiate a :class:`MedCLIPConfig` (or a derived class) from text model configuration and
         vision model configuration.
 
         Returns:
-            :class:`HybridCLIPConfig`: An instance of a configuration object
+            :class:`MedCLIPConfig`: An instance of a configuration object
         """
 
         return cls(text_config=text_config.to_dict(), vision_config=vision_config.to_dict(), **kwargs)

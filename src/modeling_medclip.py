@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2021 The HuggingFace Team. All rights reserved.
+# Copyright 2021 Santiago Hincapie-Potes & The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from src.configuration_medclip import HybridCLIPConfig
+from src.configuration_medclip import MedCLIPConfig
 from flax.core.frozen_dict import FrozenDict
 from transformers import FLAX_MODEL_MAPPING, FlaxCLIPVisionModel
 from transformers.modeling_flax_utils import FlaxPreTrainedModel
@@ -29,8 +29,8 @@ from transformers.utils import logging
 logger = logging.get_logger(__name__)
 
 
-class FlaxHybridCLIPModule(nn.Module):
-    config: HybridCLIPConfig
+class FlaxMedCLIPModule(nn.Module):
+    config: MedCLIPConfig
     dtype: jnp.dtype = jnp.float32
 
     def setup(self):
@@ -122,13 +122,13 @@ class FlaxHybridCLIPModule(nn.Module):
         )
 
 
-class FlaxHybridCLIP(FlaxPreTrainedModel):
-    config_class = HybridCLIPConfig
-    module_class = FlaxHybridCLIPModule
+class FlaxMedCLIP(FlaxPreTrainedModel):
+    config_class = MedCLIPConfig
+    module_class = FlaxMedCLIPModule
 
     def __init__(
         self,
-        config: HybridCLIPConfig,
+        config: MedCLIPConfig,
         input_shape: Optional[Tuple] = None,
         seed: int = 0,
         dtype: jnp.dtype = jnp.float32,
@@ -347,14 +347,14 @@ class FlaxHybridCLIP(FlaxPreTrainedModel):
 
         Example::
 
-            >>> from transformers import FlaxHybridCLIP
+            >>> from transformers import FlaxMedCLIP
             >>> # initialize a model from pretrained BERT and CLIP models. Note that the projection layers will be randomly initialized.
             >>> # If using CLIP's vision model the vision projection layer will be initialized using pre-trained weights
-            >>> model = FlaxHybridCLIP.from_text_vision_pretrained('bert-base-uncased', 'openai/clip-vit-base-patch32')
+            >>> model = FlaxMedCLIP.from_text_vision_pretrained('bert-base-uncased', 'openai/clip-vit-base-patch32')
             >>> # saving model after fine-tuning
             >>> model.save_pretrained("./bert-clip")
             >>> # load fine-tuned model
-            >>> model = FlaxHybridCLIP.from_pretrained("./bert-clip")
+            >>> model = FlaxMedCLIP.from_pretrained("./bert-clip")
         """
 
         kwargs_text = {
@@ -404,7 +404,7 @@ class FlaxHybridCLIP(FlaxPreTrainedModel):
 
         # instantiate config with corresponding kwargs
         dtype = kwargs.pop("dtype", jnp.float32)
-        config = HybridCLIPConfig.from_text_vision_configs(text_model.config, vision_model.config, **kwargs)
+        config = MedCLIPConfig.from_text_vision_configs(text_model.config, vision_model.config, **kwargs)
 
         # init model
         model = cls(config, *model_args, dtype=dtype, **kwargs)
