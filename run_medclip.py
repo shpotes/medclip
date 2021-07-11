@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding=utf-8
-# Copyright 2021 The HuggingFace Team All rights reserved.
+# Copyright 2021 Santiago Hincapie-Potes & The HuggingFace Team All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import torch
-from torchvision.datasets import VisionDataset
-from torchvision.io import ImageReadMode, read_image
+from torch.utils.data import ConcatDataset
 from torchvision.transforms import CenterCrop, ConvertImageDtype, Normalize, Resize
 from torchvision.transforms.functional import InterpolationMode
 from tqdm import tqdm
@@ -48,9 +47,11 @@ from flax import jax_utils
 from flax.jax_utils import unreplicate
 from flax.training import train_state
 from flax.training.common_utils import get_metrics, shard, shard_prng_key
-from src.modeling_medclip import FlaxHybridCLIP
 from transformers import AutoTokenizer, HfArgumentParser, TrainingArguments, is_tensorboard_available, set_seed
 import wandb
+
+from src.modeling_medclip import FlaxMedCLIP
+from src.datasets_medclip import MIMICDataset
 
 logger = logging.getLogger(__name__)
 
@@ -119,11 +120,11 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
 
-    data_dir: Optional[str] = field(default=None, metadata={"help": "The data directory containing input files."})
-    train_file: Optional[str] = field(
+    mimic_data_dir: Optional[str] = field(default=None, metadata={"help": "The data directory with that containing the MIMIC-CXD dataset."})
+    mimic_train_file: Optional[str] = field(
         default=None, metadata={"help": "The input training data file (a jsonlines file)."}
     )
-    validation_file: Optional[str] = field(
+    mimic_validation_file: Optional[str] = field(
         default=None,
         metadata={"help": "An optional input evaluation data file (a jsonlines file)."},
     )
@@ -134,6 +135,7 @@ class DataTrainingArguments:
             "than this will be truncated, sequences shorter will be padded."
         },
     )
+    mimic_mode: Optional[str] = field(default=None, metadata={"help": "longest or docs"})
     max_train_samples: Optional[int] = field(
         default=None,
         metadata={
@@ -160,14 +162,14 @@ class DataTrainingArguments:
     )
 
     def __post_init__(self):
-        if self.train_file is None and self.validation_file is None:
+        if self.mimic_train_file is None and self.mimic_validation_file is None:
             raise ValueError("Need either a dataset name or a training/validation file.")
         else:
-            if self.train_file is not None:
-                extension = self.train_file.split(".")[-1]
+            if self.mimic_train_file is not None:
+                extension = self.mimic_train_file.split(".")[-1]
                 assert extension == "json", "`train_file` should be a json file."
-            if self.validation_file is not None:
-                extension = self.validation_file.split(".")[-1]
+            if self.mimic_validation_file is not None:
+                extension = self.mimic_validation_file.split(".")[-1]
                 assert extension == "json", "`validation_file` should be a json file."
 
 
@@ -187,71 +189,6 @@ class Transform(torch.nn.Module):
         with torch.no_grad():
             x = self.transforms(x)
         return x
-
-
-class ImageTextDataset(VisionDataset):
-    """
-    Dtaset for loading image-text data for tasks like CLIP training, Image Captioning.
-
-    Args:
-        root: (string): The root path where the dataset is stored
-        file_path: (string): Path to the file containing the image_paths and associated captions.
-            The expected format is jsonlines where each line is a json object containing to keys.
-            `image_path`: The path to the image.
-            `captions`: An `array` of captions.
-        transform (callable, optional): A function/transform that  takes in an PIL image
-            and returns a transformed version. E.g, ``transforms.ToTensor``
-        target_transform (callable, optional): A function/transform that takes in the
-            target and transforms it.
-        transforms (callable, optional): A function/transform that takes input sample and its target as entry
-            and returns a transformed version.
-    """
-
-    def __init__(
-        self,
-        root: str,
-        file_path: str,
-        transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
-        transforms: Optional[Callable] = None,
-    ):
-        super().__init__(root, transforms, transform, target_transform)
-
-        with open(file_path, "r") as f:
-            examples = [json.loads(line) for line in f.readlines()]
-
-        self.captions = []
-        self.image_paths = []
-
-        for example in examples:
-            self.captions.append(example["caption"])
-            self.image_paths.append(f'{root}/{example["image_path"]}')
-
-    def _load_image(self, idx: int):
-        path = self.image_paths[idx]
-        return read_image(path, mode=ImageReadMode.RGB)
-
-    def _load_target(self, idx):
-        sections = self.captions[idx]
-        longest_section = max(
-            filter(lambda x: isinstance(x, str), sections.values()), 
-            key=len
-        )
-
-        return longest_section
-
-    def __getitem__(self, index: int):
-        image = self._load_image(index)
-        target = self._load_target(index)
-
-        if self.transforms is not None:
-            image, target = self.transforms(image, target)
-
-        return image, target
-
-    def __len__(self) -> int:
-        return len(self.captions)
-
 
 class TrainState(train_state.TrainState):
     dropout_rng: jnp.ndarray
@@ -348,7 +285,7 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    model = FlaxHybridCLIP.from_text_vision_pretrained(
+    model = FlaxMedCLIP.from_text_vision_pretrained(
         model_args.text_model_name_or_path,
         model_args.vision_model_name_or_path,
         seed=training_args.seed,
@@ -364,18 +301,34 @@ def main():
     preprocess = Transform(config.vision_config.image_size)
     preprocess = torch.jit.script(preprocess)
 
-    # Initialize the image-text dataset
-    train_dataset = ImageTextDataset(
-        data_args.data_dir,
-        data_args.train_file,
-        transform=preprocess,
-    )
+    _train_datasets = []
+    _eval_datasets = []
 
-    eval_dataset = ImageTextDataset(
-        data_args.data_dir,
-        data_args.validation_file,
-        transform=preprocess,
-    )
+    if data_args.mimic_data_dir is not None:
+        # Initialize the image-text dataset
+        _train_datasets.append(
+            MIMICDataset(
+                data_args.mimic_data_dir,
+                data_args.mimic_train_file,
+                transform=preprocess,
+                mode=data_args.mimic_mode,
+            )
+        )
+
+        _eval_datasets.append(
+            MIMICDataset(
+                data_args.mimic_data_dir,
+                data_args.mimic_validation_file,
+                transform=preprocess,
+                mode=data_args.mimic_mode,
+            )
+        )
+
+    if not _train_datasets or not _eval_datasets:
+        raise ValueError
+    else:
+        train_dataset = ConcatDataset(_train_datasets)
+        eval_dataset = ConcatDataset(_eval_datasets)
 
     # Store some constant
     num_epochs = int(training_args.num_train_epochs)
@@ -387,14 +340,27 @@ def main():
     # Use collate function to tokenizer the text and convert the processed images to numpy
     def collate_fn(examples):
         pixel_values = torch.stack([example[0] for example in examples]).permute(0, 2, 3, 1).numpy()
-        captions = [example[1] for example in examples]
-        inputs = tokenizer(captions, max_length=data_args.max_seq_length, padding="max_length", return_tensors="np")
+        texts = [example[1] for example in examples]
+ 
+        if isinstance(texts[0], dict):
+            inputs = tokenizer(
+                [example["impressions"] for example in texts],
+                [example["findings"] for example in texts],
+                max_length=data_args.max_seq_length, 
+                padding="max_length", 
+                return_tensors="np"
+            )
+        else:
+            inputs = tokenizer(texts, max_length=data_args.max_seq_length, padding="max_length", return_tensors="np")
 
         batch = {
             "pixel_values": pixel_values,
             "input_ids": inputs["input_ids"],
             "attention_mask": inputs["attention_mask"],
         }
+
+        if "token_type_ids" in inputs:
+            batch["token_type_ids"] = inputs["token_type_ids"]
 
         return batch
 

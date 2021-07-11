@@ -3,11 +3,12 @@ python run_medclip.py \
     --text_model_name_or_path="allenai/scibert_scivocab_uncased" \
     --vision_model_name_or_path="openai/clip-vit-base-patch32" \
     --tokenizer_name="allenai/scibert_scivocab_uncased" \
-    --data_dir="/home/shared/data/mimic-cxr" \
-    --train_file="/home/shared/data/mimic-cxr/train_dataset.json" \
-    --validation_file="/home/shared/data/mimic-cxr/validate_dataset.json" \
+    --mimic_data_dir="/home/shared/data/mimic-cxr/" \
+    --mimic_train_file="train_dataset.json" \
+    --mimic_validation_file="validate_dataset.json" \
+    --mimic_mode="docs" \
     --do_train --do_eval \
-    --num_train_epochs="40" --max_seq_length 512 \
+    --num_train_epochs="1" --max_seq_length 512 \
     --per_device_train_batch_size="64" \
     --per_device_eval_batch_size="64" \
     --learning_rate="5e-5" --warmup_steps="0" --weight_decay 0.1 \
