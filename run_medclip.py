@@ -344,7 +344,7 @@ def main():
  
         if isinstance(texts[0], dict):
             inputs = tokenizer(
-                [example["impressions"] for example in texts],
+                [example["impression"] for example in texts],
                 [example["findings"] for example in texts],
                 max_length=data_args.max_seq_length, 
                 padding="max_length", 

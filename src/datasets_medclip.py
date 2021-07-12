@@ -82,11 +82,11 @@ class MIMICDataset(VisionDataset):
 
         if self.mode == 'docs':
             output = {}
-            if sections['impressions']:
-                output['impressions'] = sections['impressions']
+            if 'impression' in sections:
+                output['impression'] = sections['impression']
                 num_sections += 1
 
-            if sections['findings']:
+            if 'findings' in sections:
                 output['findings'] = sections['findings']
                 num_sections += 1
 

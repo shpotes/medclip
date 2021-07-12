@@ -8,9 +8,9 @@ python run_medclip.py \
     --mimic_validation_file="validate_dataset.json" \
     --mimic_mode="docs" \
     --do_train --do_eval \
-    --num_train_epochs="1" --max_seq_length 512 \
+    --num_train_epochs="40" --max_seq_length 512 \
     --per_device_train_batch_size="64" \
     --per_device_eval_batch_size="64" \
     --learning_rate="5e-5" --warmup_steps="0" --weight_decay 0.1 \
     --overwrite_output_dir \
-    --preprocessing_num_workers 32 \
+    --preprocessing_num_workers 32
