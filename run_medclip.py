@@ -41,6 +41,7 @@ from tqdm import tqdm
 
 import jax
 import jax.numpy as jnp
+import numpy as onp
 import optax
 import transformers
 from flax import jax_utils
@@ -348,10 +349,17 @@ def main():
                 [example["findings"] for example in texts],
                 max_length=data_args.max_seq_length, 
                 padding="max_length", 
+                truncation="only_second",
                 return_tensors="np"
             )
         else:
-            inputs = tokenizer(texts, max_length=data_args.max_seq_length, padding="max_length", return_tensors="np")
+            inputs = tokenizer(
+                texts, 
+                max_length=data_args.max_seq_length, 
+                padding="max_length",
+                truncation=True,
+                return_tensors="np"
+            )
 
         batch = {
             "pixel_values": pixel_values,
@@ -360,7 +368,7 @@ def main():
         }
 
         if "token_type_ids" in inputs:
-            batch["token_type_ids"] = inputs["token_type_ids"]
+            batch["token_type_ids"] = onp.array(inputs["token_type_ids"])
 
         return batch
 
