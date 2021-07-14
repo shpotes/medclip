@@ -23,7 +23,6 @@ Vision models: ViT(https://huggingface.co/models?filter=vit), CLIP (https://hugg
 Text models: BERT, ROBERTa (https://huggingface.co/models?filter=masked-lm)
 """
 
-import json
 import logging
 import os
 import sys
@@ -52,7 +51,7 @@ from transformers import AutoTokenizer, HfArgumentParser, TrainingArguments, is_
 import wandb
 
 from src.modeling_medclip import FlaxMedCLIP
-from src.datasets_medclip import MIMICDataset
+from src.datasets_medclip import MIMICDataset, ROCODataset
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +128,8 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "An optional input evaluation data file (a jsonlines file)."},
     )
+    mimic_mode: Optional[str] = field(default=None, metadata={"help": "longest or docs"})
+    roco_data_dir: Optional[str] = field(default=None, metadata={"help": "The data directory with that containing the ROCO dataset."})
     max_seq_length: Optional[int] = field(
         default=72,
         metadata={
@@ -136,7 +137,6 @@ class DataTrainingArguments:
             "than this will be truncated, sequences shorter will be padded."
         },
     )
-    mimic_mode: Optional[str] = field(default=None, metadata={"help": "longest or docs"})
     max_train_samples: Optional[int] = field(
         default=None,
         metadata={
@@ -158,7 +158,7 @@ class DataTrainingArguments:
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
     preprocessing_num_workers: Optional[int] = field(
-        default=None,
+        default=32,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
 
@@ -325,6 +325,23 @@ def main():
             )
         )
 
+    if data_args.roco_data_dir is not None:
+        _train_datasets.append(
+            ROCODataset(
+                data_args.roco_data_dir,
+                split="train",
+                transform=preprocess,
+            )
+        )
+
+        _eval_datasets.append(
+            ROCODataset(
+                data_args.roco_data_dir,
+                split="val",
+                transform=preprocess,
+            )
+        )
+
     if not _train_datasets or not _eval_datasets:
         raise ValueError
     else:
@@ -342,33 +359,20 @@ def main():
     def collate_fn(examples):
         pixel_values = torch.stack([example[0] for example in examples]).permute(0, 2, 3, 1).numpy()
         texts = [example[1] for example in examples]
- 
-        if isinstance(texts[0], dict):
-            inputs = tokenizer(
-                [example["impression"] for example in texts],
-                [example["findings"] for example in texts],
-                max_length=data_args.max_seq_length, 
-                padding="max_length", 
-                truncation="only_second",
-                return_tensors="np"
-            )
-        else:
-            inputs = tokenizer(
-                texts, 
-                max_length=data_args.max_seq_length, 
-                padding="max_length",
-                truncation=True,
-                return_tensors="np"
-            )
+
+        inputs = tokenizer(
+            texts,
+            max_length=data_args.max_seq_length, 
+            padding="max_length",
+            return_tensors="np",
+            truncation=True,
+        )
 
         batch = {
             "pixel_values": pixel_values,
             "input_ids": inputs["input_ids"],
             "attention_mask": inputs["attention_mask"],
         }
-
-        if "token_type_ids" in inputs:
-            batch["token_type_ids"] = onp.array(inputs["token_type_ids"])
 
         return batch
 

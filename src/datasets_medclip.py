@@ -13,18 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import csv
 import json
+import random
 from pathlib import Path
 from typing import Callable, Dict, Optional, Union
 
 from torchvision.datasets import VisionDataset
 from torchvision.io import ImageReadMode, read_image
 
-TextTarget = Union[str, Dict[str, str]]
-
 class MIMICDataset(VisionDataset):
     """
-    Dtaset for loading image-text data for tasks like CLIP training, Image Captioning.
+    Dataset for loading image-text data for tasks like CLIP training, Image Captioning.
 
     Args:
         root: (string): The root path where the dataset is stored
@@ -75,25 +75,23 @@ class MIMICDataset(VisionDataset):
         path = self.image_paths[idx]
         return read_image(path, mode=ImageReadMode.RGB)
 
-    def _load_target(self, idx) -> TextTarget:
+    def _load_target(self, idx) -> str:
         sections = self.captions[idx]
 
-        num_sections = 0
-
         if self.mode == 'docs':
-            output = {}
+            _collection = []
             if 'impression' in sections:
-                output['impression'] = sections['impression']
-                num_sections += 1
+                _collection.append(sections['impression'])
 
             if 'findings' in sections:
-                output['findings'] = sections['findings']
-                num_sections += 1
+                _collection.append(sections['findings'])
 
-            if num_sections == 1:
-                output = next(output.values())
+            if len(_collection) == 1:
+                output = _collection[0]
+            if len(_collection) == 2:
+                output = random.choice(_collection)
 
-        if self.mode == 'longest' or num_sections == 0:
+        if self.mode == 'longest' or len(_collection) == 0:
             longest_section = max(
                 filter(lambda x: isinstance(x, str), sections.values()), 
                 key=len
@@ -102,6 +100,72 @@ class MIMICDataset(VisionDataset):
             output = longest_section
 
         return output
+
+    def __getitem__(self, index: int):
+        image = self._load_image(index)
+        target = self._load_target(index)
+
+        if self.transforms is not None:
+            image, target = self.transforms(image, target)
+
+        return image, target
+
+    def __len__(self) -> int:
+        return len(self.captions)
+
+
+class ROCODataset(VisionDataset):
+    """
+    Dataset for loading image-text data for tasks like CLIP training, Image Captioning.
+
+    Args:
+        root: (string): The root path where the dataset is stored
+        file_path: (string): Path to the file containing the image_paths and associated captions.
+            The expected format is jsonlines where each line is a json object containing to keys.
+            `image_path`: The path to the image.
+            `captions`: An `array` of captions.
+        transform (callable, optional): A function/transform that  takes in an PIL image
+            and returns a transformed version. E.g, ``transforms.ToTensor``
+        target_transform (callable, optional): A function/transform that takes in the
+            target and transforms it.
+        transforms (callable, optional): A function/transform that takes input sample and its target as entry
+            and returns a transformed version.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        split: str,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        transforms: Optional[Callable] = None,
+    ):
+        super().__init__(root, transforms, transform, target_transform)
+
+        root = Path(root) / f"{split}/radiology/"
+        file_path = f"{split}.csv"
+
+        self.captions = []
+        self.image_paths = []
+
+        with open((root / file_path).resolve(), 'r') as buf:
+            csv_reader = csv.reader(buf)
+            next(csv_reader) # skip header
+
+            for row in csv_reader:
+                if len(row) == 3:
+                    _, fname, caption = row
+                else:
+                    print(row)
+                self.captions.append(caption.strip())
+                self.image_paths.append(str(root / 'images' / fname.strip()))
+
+    def _load_image(self, idx: int):
+        path = self.image_paths[idx]
+        return read_image(path, mode=ImageReadMode.RGB)
+
+    def _load_target(self, idx: int) -> str:
+        return self.captions[idx]
 
     def __getitem__(self, index: int):
         image = self._load_image(index)
